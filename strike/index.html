@@ -1,0 +1,812 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <meta name="theme-color" content="#07111e">
+  <meta name="description"
+    content="STRIKE — a cinematic thunderstorm screensaver with live local weather. Your vibe. Your weather.">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src https://api.open-meteo.com; base-uri 'none'; form-action 'none'">
+  <title>STRIKE — Your vibe. Your weather.</title>
+  <link rel="icon" type="image/svg+xml" sizes="any"
+    href="data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 64 64%27%3E%3Crect width=%2764%27 height=%2764%27 rx=%2714%27 fill=%27%23111827%27/%3E%3Cpath d=%27M13 34a15 15 0 0 1 28-6 11 11 0 0 1 8 19h-7m-16-1 8-12h-8l-4 10h7l-6 11%27 fill=%27none%27 stroke=%27%23a5b4fc%27 stroke-width=%276%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      min-height: 100%;
+      background: #07111e;
+      color: #f4f8ff;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, "Segoe UI", sans-serif
+    }
+
+    body {
+      min-height: 100vh;
+      min-height: 100dvh;
+      overflow-x: hidden
+    }
+
+    .scene {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      background: radial-gradient(ellipse at 75% 12%, #293d55 0, transparent 36%), radial-gradient(ellipse at 10% 75%, #132b3b 0, transparent 42%), linear-gradient(180deg, #111e30 0%, #091522 48%, #040a11 100%);
+      isolation: isolate
+    }
+
+    .clouds {
+      position: absolute;
+      inset: -15%;
+      opacity: .65;
+      filter: blur(32px);
+      will-change: transform;
+      background: radial-gradient(ellipse at 20% 20%, #314258 0 8%, transparent 28%), radial-gradient(ellipse at 62% 16%, #526176 0 7%, transparent 27%), radial-gradient(ellipse at 83% 35%, #293c52 0 9%, transparent 29%), radial-gradient(ellipse at 42% 48%, #1b2b3f 0 12%, transparent 33%);
+      animation: cloudDrift 35s ease-in-out infinite alternate
+    }
+
+    .horizon {
+      position: absolute;
+      bottom: 0;
+      left: -5%;
+      width: 110%;
+      height: 38%;
+      background: linear-gradient(180deg, transparent, #091521b8 35%, #02070d 100%);
+      clip-path: polygon(0 52%, 10% 35%, 18% 48%, 27% 25%, 38% 49%, 49% 30%, 62% 53%, 72% 28%, 84% 46%, 100% 32%, 100% 100%, 0 100%)
+    }
+
+    .horizon:after {
+      content: "";
+      position: absolute;
+      inset: 45% 0 0;
+      background: repeating-linear-gradient(176deg, transparent 0 13px, #8bb8d012 14px 15px, transparent 16px 25px);
+      opacity: .6
+    }
+
+    .glow {
+      position: absolute;
+      inset: 0;
+      background: #dceeff;
+      opacity: 0;
+      pointer-events: none;
+      mix-blend-mode: screen
+    }
+
+    .bolt {
+      position: absolute;
+      right: 16%;
+      top: 8%;
+      width: min(31vw, 350px);
+      height: 57vh;
+      opacity: 0;
+      filter: drop-shadow(0 0 9px #a8d7ff) drop-shadow(0 0 30px #8fc8ff);
+      overflow: visible
+    }
+
+    .bolt path {
+      fill: none;
+      vector-effect: non-scaling-stroke;
+      stroke: #e4f4ff;
+      stroke-width: 3;
+      stroke-linecap: round;
+      stroke-linejoin: round
+    }
+
+    .rain {
+      position: absolute;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none
+    }
+
+    .wrap {
+      position: relative;
+      z-index: 2;
+      width: min(1120px, calc(100% - 48px));
+      margin: auto;
+      min-height: 100vh;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column
+    }
+
+    header {
+      height: 84px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      border-bottom: 1px solid #ffffff1a
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin: 0;
+      font-size: 13px;
+      letter-spacing: .22em;
+      text-transform: uppercase;
+      font-weight: 750
+    }
+
+    .brand-mark {
+      width: 28px;
+      height: 28px;
+      border: 1px solid #b6d8f888;
+      border-radius: 50%;
+      display: grid;
+      place-items: center;
+      box-shadow: 0 0 24px #76bfff20
+    }
+
+    .brand-mark:before {
+      content: "";
+      width: 7px;
+      height: 13px;
+      background: #d8efff;
+      clip-path: polygon(55% 0, 100% 0, 62% 42%, 100% 42%, 22% 100%, 40% 53%, 0 53%)
+    }
+
+    .live {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+      font-size: 12px;
+      letter-spacing: .16em;
+      text-transform: uppercase;
+      color: #b7c7d8
+    }
+
+    .dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: #9dd7ff;
+      box-shadow: 0 0 14px #8bcaff;
+      animation: pulse 2.6s infinite
+    }
+
+    .content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 66px 0 58px
+    }
+
+    .eyebrow {
+      font-size: 12px;
+      letter-spacing: .24em;
+      text-transform: uppercase;
+      color: #b7cce0;
+      display: flex;
+      align-items: center;
+      gap: 12px
+    }
+
+    .eyebrow:before {
+      content: "";
+      width: 34px;
+      height: 1px;
+      background: #8bb9dc
+    }
+
+    .clock {
+      display: block;
+      font-size: clamp(76px, 13vw, 164px);
+      line-height: .93;
+      letter-spacing: -.035em;
+      font-weight: 300;
+      font-variant-numeric: tabular-nums;
+      margin: 25px 0 14px;
+      text-shadow: 0 0 45px #8ebce91b
+    }
+
+    .clock .seconds {
+      font-size: .28em;
+      letter-spacing: 0;
+      color: #b4c8dc;
+      vertical-align: top;
+      display: inline-block;
+      margin: 13px 0 0 16px;
+      position: relative;
+      z-index: 1
+    }
+
+    .date {
+      font-size: clamp(16px, 2vw, 22px);
+      font-weight: 400;
+      color: #d5e1ee;
+      letter-spacing: -.025em
+    }
+
+    .timezone {
+      margin-top: 12px;
+      font-size: 13px;
+      color: #9caec1;
+      letter-spacing: .04em
+    }
+
+    .weather-card {
+      margin-top: 37px;
+      width: min(100%, 552px);
+      padding: 20px 22px 18px;
+      border: 1px solid #ffffff28;
+      border-radius: 20px;
+      background: linear-gradient(130deg, #ffffff12, #ffffff05);
+      backdrop-filter: blur(18px);
+      box-shadow: 0 20px 70px #00000024
+    }
+
+    .weather-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 20px
+    }
+
+    .weather-place {
+      font-size: 12px;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      color: #aabdd0;
+      margin-bottom: 11px
+    }
+
+    .weather-summary {
+      display: flex;
+      align-items: center;
+      gap: 17px
+    }
+
+    .weather-icon {
+      font-size: 36px;
+      filter: drop-shadow(0 0 12px #b6dcff3b)
+    }
+
+    .temp {
+      font-size: clamp(40px, 6vw, 62px);
+      font-weight: 300;
+      letter-spacing: -.07em
+    }
+
+    .desc {
+      font-size: 13px;
+      color: #c2d0df;
+      margin-top: 2px
+    }
+
+    .refresh {
+      background: #ffffff0d;
+      border: 1px solid #ffffff24;
+      color: #dce8f5;
+      border-radius: 999px;
+      padding: 10px 14px;
+      font-size: 11px;
+      cursor: pointer;
+      white-space: nowrap
+    }
+
+    .refresh:hover {
+      background: #ffffff18
+    }
+
+    .refresh:disabled {
+      opacity: .6;
+      cursor: default
+    }
+
+    .metrics {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 12px;
+      border-top: 1px solid #ffffff1a;
+      margin-top: 18px;
+      padding-top: 15px
+    }
+
+    .metric-label {
+      font-size: 11px;
+      letter-spacing: .14em;
+      text-transform: uppercase;
+      color: #91a5ba
+    }
+
+    .metric-value {
+      font-size: 15px;
+      margin-top: 7px;
+      color: #edf5ff
+    }
+
+    .hint {
+      font-size: 11px;
+      color: #8ea3b8;
+      margin-top: 11px;
+      line-height: 1.6
+    }
+
+    .hint button {
+      border: 0;
+      background: none;
+      color: #c5e4ff;
+      text-decoration: underline;
+      text-underline-offset: 3px;
+      cursor: pointer;
+      font: inherit
+    }
+
+    .refresh:focus-visible,
+    .hint button:focus-visible {
+      outline: 2px solid #9dd7ff;
+      outline-offset: 3px
+    }
+
+    .stale .weather-summary {
+      opacity: .6
+    }
+
+    .flash {
+      animation: flash .6s ease-out
+    }
+
+    @keyframes cloudDrift {
+      from {
+        transform: translate3d(-2%, 0, 0) scale(1)
+      }
+
+      to {
+        transform: translate3d(3%, 2%, 0) scale(1.08)
+      }
+    }
+
+    @keyframes pulse {
+
+      0%,
+      100% {
+        opacity: .5
+      }
+
+      50% {
+        opacity: 1
+      }
+    }
+
+    @keyframes flash {
+      0% {
+        opacity: 0
+      }
+
+      9% {
+        opacity: .55
+      }
+
+      30% {
+        opacity: .12
+      }
+
+      100% {
+        opacity: 0
+      }
+    }
+
+    body.paused *,
+    body.paused *::before,
+    body.paused *::after {
+      animation-play-state: paused !important
+    }
+
+    @media(max-width:650px) {
+      .wrap {
+        width: calc(100% - 32px)
+      }
+
+      header {
+        height: 70px
+      }
+
+      .brand {
+        font-size: 11px
+      }
+
+      .live {
+        font-size: 10px;
+        letter-spacing: .1em
+      }
+
+      .content {
+        padding: 58px 0 42px
+      }
+
+      .clock {
+        font-size: clamp(66px, 17vw, 104px)
+      }
+
+      .clock .seconds {
+        margin-top: 8px;
+        margin-left: 8px
+      }
+
+      .weather-card {
+        padding: 17px 16px;
+        margin-top: 29px
+      }
+
+      .weather-top {
+        align-items: flex-start
+      }
+
+      .weather-icon {
+        font-size: 35px
+      }
+
+      .refresh {
+        padding: 9px 10px;
+        font-size: 11px
+      }
+
+      .metrics {
+        grid-template-columns: repeat(2, 1fr);
+        gap: 14px 8px
+      }
+
+      .metric-label {
+        font-size: 10px;
+        letter-spacing: .08em
+      }
+
+      .metric-value {
+        font-size: 13px
+      }
+
+      .bolt {
+        right: 4%;
+        top: 10%;
+        width: 55vw;
+        height: 42vh
+      }
+    }
+
+    @media(prefers-reduced-motion:reduce) {
+
+      *,
+      *:before,
+      *:after {
+        animation: none !important
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="scene" aria-hidden="true">
+    <div class="clouds"></div>
+    <div class="horizon"></div><canvas class="rain" id="rain"></canvas><svg class="bolt" id="bolt" viewBox="0 0 300 500"
+      preserveAspectRatio="none">
+      <path id="boltPath" d="M170 0 L128 110 L164 104 L90 245 L128 229 L55 390" />
+    </svg>
+    <div class="glow" id="glow"></div>
+  </div>
+  <div class="wrap">
+    <header>
+      <h1 class="brand"><span class="brand-mark" aria-hidden="true"></span> STRIKE</h1>
+      <div class="live"><span class="dot" aria-hidden="true"></span> <span>LIVE CONDITIONS</span></div>
+    </header>
+    <main class="content">
+      <div class="eyebrow">Your vibe. Your weather.</div><time class="clock" id="clock"><span id="hm">--:--</span><span
+          class="seconds" id="sec">--</span></time>
+      <div class="date" id="date">Loading date…</div>
+      <div class="timezone" id="timezone">Detecting device time zone</div>
+      <section class="weather-card" id="card" aria-label="Current weather">
+        <div class="weather-top">
+          <div>
+            <div class="weather-place" id="place">YOUR LOCATION</div>
+            <div class="weather-summary">
+              <div class="weather-icon" id="weatherIcon" aria-hidden="true">🌧️</div>
+              <div>
+                <div class="temp" id="temp">—°</div>
+                <div class="desc" id="desc" aria-live="polite">Waiting for location permission</div>
+              </div>
+            </div>
+          </div><button class="refresh" id="refresh" type="button">↻ Refresh weather</button>
+        </div>
+        <div class="metrics">
+          <div>
+            <div class="metric-label">Feels like</div>
+            <div class="metric-value" id="feels">—</div>
+          </div>
+          <div>
+            <div class="metric-label">Humidity</div>
+            <div class="metric-value" id="humidity">—</div>
+          </div>
+          <div>
+            <div class="metric-label">Wind</div>
+            <div class="metric-value" id="wind">—</div>
+          </div>
+          <div>
+            <div class="metric-label">Precip. chance</div>
+            <div class="metric-value" id="precip">—</div>
+          </div>
+        </div>
+        <div class="hint" aria-live="polite"><span id="hintText">Allow location access to show the weather near
+            you.</span> <button id="locate" type="button">Detect location</button></div>
+      </section>
+    </main>
+  </div>
+  <script>
+    'use strict';
+    const $ = id => document.getElementById(id);
+    const locale = 'en-US';
+    const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+    const RETRY_MS = [60e3, 120e3, 300e3];   // backoff after a failed weather request: 1, 2, then 5 min
+    const FETCH_TIMEOUT_MS = 10000;
+    const pad = n => String(n).padStart(2, '0');
+    const hhmm = d => `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    const isActive = () => !document.hidden;   // Page Visibility is the only pause signal; window blur is ignored on purpose
+
+    /* ---------- Reduced motion ---------- */
+    const motionQuery = window.matchMedia('(prefers-reduced-motion: reduce)');
+    let reduceMotion = motionQuery.matches;
+    const shouldAnimate = () => isActive() && !reduceMotion;
+
+    /* ---------- Clock ---------- */
+    const timezone = Intl.DateTimeFormat().resolvedOptions().timeZone || 'Device time zone';
+    const dateFmt = new Intl.DateTimeFormat(locale, {weekday: 'long', day: 'numeric', month: 'long', year: 'numeric'});
+    const tzFmt = new Intl.DateTimeFormat(locale, {timeZoneName: 'short'});
+    const clockEl = $('clock'), hmEl = $('hm'), secEl = $('sec'), dateEl = $('date'), tzEl = $('timezone');
+    let clockTimer = null, lastHM = '';
+    function tick() {
+      const now = new Date(), hm = hhmm(now);
+      if (hm !== lastHM) {   // date and zone only need refreshing when the minute changes
+        lastHM = hm;
+        hmEl.textContent = hm;
+        clockEl.dateTime = hm;
+        dateEl.textContent = dateFmt.format(now);
+        const tzName = tzFmt.formatToParts(now).find(x => x.type === 'timeZoneName');
+        tzEl.textContent = tzName ? `${timezone} · ${tzName.value}` : timezone;
+      }
+      secEl.textContent = pad(now.getSeconds());
+    }
+    function scheduleTick() {clockTimer = setTimeout(() => {tick(); scheduleTick()}, 1000 - Date.now() % 1000 + 5)}   // aligned to the second boundary
+    function startClock() {if (clockTimer === null) {lastHM = ''; tick(); scheduleTick()} }
+    function stopClock() {if (clockTimer !== null) {clearTimeout(clockTimer); clockTimer = null} }
+
+    /* ---------- Weather ---------- */
+    // code: [description, day icon, optional night icon]
+    const WEATHER = {0: ['Clear', '☀️', '🌙'], 1: ['Mostly clear', '🌤️', '🌙'], 2: ['Partly cloudy', '⛅', '☁️'], 3: ['Overcast', '☁️'], 45: ['Fog', '🌫️'], 48: ['Depositing rime fog', '🌫️'], 51: ['Light drizzle', '🌦️'], 53: ['Drizzle', '🌦️'], 55: ['Dense drizzle', '🌧️'], 56: ['Freezing drizzle', '🌧️'], 57: ['Heavy freezing drizzle', '🌧️'], 61: ['Light rain', '🌦️'], 63: ['Rain', '🌧️'], 65: ['Heavy rain', '🌧️'], 66: ['Freezing rain', '🌧️'], 67: ['Heavy freezing rain', '🌧️'], 71: ['Light snow', '🌨️'], 73: ['Snow', '🌨️'], 75: ['Heavy snow', '❄️'], 77: ['Snow grains', '🌨️'], 80: ['Rain showers', '🌦️'], 81: ['Heavy rain showers', '🌧️'], 82: ['Violent rain showers', '⛈️'], 85: ['Snow showers', '🌨️'], 86: ['Heavy snow showers', '❄️'], 95: ['Thunderstorm', '⛈️'], 96: ['Thunderstorm with hail', '⛈️'], 99: ['Heavy thunderstorm with hail', '⛈️']};
+    const cardEl = $('card'), descEl = $('desc'), hintText = $('hintText'), locateBtn = $('locate'), refreshBtn = $('refresh');
+    let lastCoords = null, weatherTimer = null, weatherLoading = false, lastAttemptAt = 0, nextDelayMs = WEATHER_REFRESH_MS, failCount = 0, lastUpdated = null;
+
+    function setHint(text, buttonLabel) {
+      hintText.textContent = text;
+      if (buttonLabel) {locateBtn.textContent = buttonLabel; locateBtn.hidden = false} else locateBtn.hidden = true;
+    }
+    function setRefreshBusy(busy) {
+      refreshBtn.disabled = busy;
+      refreshBtn.setAttribute('aria-busy', String(busy));
+      refreshBtn.textContent = busy ? '↻ Refreshing…' : '↻ Refresh weather';
+    }
+    const round = (v, unit) => typeof v === 'number' ? `${Math.round(v)}${unit}` : '—';
+    // Precipitation probability exists only in Open-Meteo's hourly data, not in `current`: take the entry for the current hour.
+    function precipChance(d, c) {
+      const h = d && d.hourly;
+      if (!h || !Array.isArray(h.precipitation_probability)) return null;
+      const hour = String(c.time || '').slice(0, 13);
+      let i = Array.isArray(h.time) ? h.time.findIndex(t => String(t).slice(0, 13) === hour) : -1;
+      if (i < 0) i = 0;
+      return h.precipitation_probability[i];
+    }
+
+    function stopWeatherTimer() {if (weatherTimer) {clearTimeout(weatherTimer); weatherTimer = null} }
+    function scheduleWeatherRefresh() {
+      stopWeatherTimer();
+      if (!isActive() || !lastCoords || weatherLoading) return;   // an in-flight request reschedules itself when it finishes
+      const delay = Math.max(0, nextDelayMs - (Date.now() - lastAttemptAt));
+      weatherTimer = setTimeout(() => {
+        weatherTimer = null;
+        if (!isActive() || !lastCoords) return;
+        refreshWeather();
+      }, delay);
+    }
+    function refreshWeather() {
+      if (!lastCoords) return Promise.resolve();
+      return loadWeather(lastCoords.lat, lastCoords.lon).finally(scheduleWeatherRefresh);
+    }
+    async function loadWeather(lat, lon) {
+      if (weatherLoading) return;
+      weatherLoading = true; lastAttemptAt = Date.now();
+      setRefreshBusy(true);
+      if (!lastUpdated) descEl.textContent = 'Loading current weather…';   // background refreshes keep the current text
+      const ctrl = new AbortController(), abortTimer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+      try {
+        const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,relative_humidity_2m,apparent_temperature,is_day,weather_code,wind_speed_10m&hourly=precipitation_probability&forecast_hours=1&timezone=auto`;
+        const r = await fetch(url, {signal: ctrl.signal});
+        if (!r.ok) throw Error('weather ' + r.status);
+        const d = await r.json(), c = d && d.current;
+        if (!c || typeof c.temperature_2m !== 'number') throw Error('unexpected weather payload');
+        const w = WEATHER[c.weather_code] || ['Weather conditions', '🌡️'];
+        $('temp').textContent = round(c.temperature_2m, '°C');
+        descEl.textContent = w[0];
+        $('weatherIcon').textContent = (c.is_day === 0 && w[2]) ? w[2] : w[1];
+        $('feels').textContent = round(c.apparent_temperature, '°C');
+        $('humidity').textContent = round(c.relative_humidity_2m, '%');
+        $('wind').textContent = round(c.wind_speed_10m, ' km/h');
+        $('precip').textContent = round(precipChance(d, c), '%');
+        $('place').textContent = 'CURRENT WEATHER NEARBY';
+        failCount = 0; nextDelayMs = WEATHER_REFRESH_MS; lastUpdated = new Date();
+        cardEl.classList.remove('stale');
+        setHint(`Updated at ${hhmm(lastUpdated)} · refreshes automatically every ${WEATHER_REFRESH_MS / 60000} minutes`);
+      } catch (e) {
+        failCount++;
+        nextDelayMs = RETRY_MS[Math.min(failCount - 1, RETRY_MS.length - 1)];
+        const mins = Math.round(nextDelayMs / 60000);
+        if (lastUpdated) {   // keep the last good reading on screen, but mark it as stale
+          cardEl.classList.add('stale');
+          setHint(`Couldn’t update · showing data from ${hhmm(lastUpdated)}. Retrying in ${mins} min, or press “Refresh weather”.`);
+        } else {
+          descEl.textContent = 'Could not load weather';
+          setHint(`Could not load weather. Retrying in ${mins} min, or press “Refresh weather”.`);
+        }
+      } finally {
+        clearTimeout(abortTimer);
+        weatherLoading = false;
+        setRefreshBusy(false);
+      }
+    }
+
+    /* ---------- Geolocation ---------- */
+    const GEO_PROMPT = 'Allow location access to show the weather near you.';
+    const GEO_BLOCKED = 'Location access is blocked. Allow it in your browser’s site settings (the lock icon next to the address), then try again.';
+    let locating = false;
+    function locate() {
+      if (!navigator.geolocation) {setHint('Your browser does not support geolocation.'); return }
+      if (locating) return;
+      locating = true;
+      setHint('Waiting for location access permission…');
+      navigator.geolocation.getCurrentPosition(pos => {
+        locating = false;
+        lastCoords = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+        refreshWeather();
+      }, err => {
+        locating = false;
+        if (err && err.code === 1) setHint(GEO_BLOCKED, 'Try again');
+        else setHint('Couldn’t determine your location. Check your connection and try again.', 'Try again');
+      }, {enableHighAccuracy: false, timeout: 12000, maximumAge: 600000});
+    }
+    function initLocation() {
+      if (!navigator.permissions || !navigator.permissions.query) {locate(); return }
+      navigator.permissions.query({name: 'geolocation'}).then(status => {
+        const apply = () => {
+          if (lastCoords || locating) return;
+          if (status.state === 'granted') locate();
+          else if (status.state === 'denied') setHint(GEO_BLOCKED, 'Try again');
+          else setHint(GEO_PROMPT, 'Detect location');   // not asked yet: explain first, prompt on click
+        };
+        apply();
+        status.onchange = apply;
+      }).catch(locate);
+    }
+    refreshBtn.onclick = () => {if (lastCoords) refreshWeather(); else locate()};
+    locateBtn.onclick = locate;
+
+    /* ---------- Rain (canvas) ---------- */
+    // Drops are grouped into a few opacity/width layers so each layer is drawn with a single stroke() call.
+    const canvas = $('rain'), ctx = canvas.getContext('2d');
+    const RAIN_LAYERS = [[.14, .7], [.2, .7], [.27, .7], [.35, .9], [.44, 1.2]].map(([a, w]) => ({w, color: `rgba(190,220,245,${a})`}));
+    const RAIN_FRAME_MS = 22;   // frame cap: ≈30 fps on 60 Hz, ≈36 fps on 144 Hz
+    const RAIN_WIND = 72;       // sideways drift, px/s
+    let W = 0, H = 0, rainLayers = [], rainRaf = null, lastFrameTs = 0;
+    function resize() {
+      const dpr = Math.min(window.devicePixelRatio || 1, 1.5);
+      W = innerWidth; H = innerHeight;
+      canvas.width = Math.round(W * dpr); canvas.height = Math.round(H * dpr);
+      canvas.style.width = W + 'px'; canvas.style.height = H + 'px';
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const count = Math.min(260, Math.floor(W * H / 4800));
+      rainLayers = RAIN_LAYERS.map(() => []);
+      for (let i = 0; i < count; i++) {
+        rainLayers[Math.floor(Math.random() * RAIN_LAYERS.length)].push({x: Math.random() * W, y: Math.random() * H, len: 9 + Math.random() * 19, speed: 300 + Math.random() * 540});   // speed in px/s
+      }
+    }
+    function drawRain(dt) {   // dt in seconds; 0 draws a static frame
+      ctx.clearRect(0, 0, W, H);
+      ctx.lineCap = 'round';
+      for (let i = 0; i < rainLayers.length; i++) {
+        ctx.beginPath();
+        for (const d of rainLayers[i]) {
+          d.x -= RAIN_WIND * dt; d.y += d.speed * dt;
+          if (d.y > H + 25) {d.y = -25; d.x = Math.random() * (W + 100)}
+          if (d.x < -30) d.x = W + 20;
+          ctx.moveTo(d.x, d.y); ctx.lineTo(d.x - 3, d.y + d.len);
+        }
+        ctx.strokeStyle = RAIN_LAYERS[i].color; ctx.lineWidth = RAIN_LAYERS[i].w; ctx.stroke();
+      }
+    }
+    function rainFrame(ts) {
+      if (!shouldAnimate()) {rainRaf = null; return }
+      rainRaf = requestAnimationFrame(rainFrame);
+      if (!lastFrameTs) {lastFrameTs = ts; return }
+      const elapsed = ts - lastFrameTs;
+      if (elapsed < RAIN_FRAME_MS) return;
+      lastFrameTs = ts;
+      drawRain(Math.min(elapsed, 50) / 1000);   // clamp so a long stall doesn't make drops jump
+    }
+    function startRain() {if (rainRaf === null) {lastFrameTs = 0; rainRaf = requestAnimationFrame(rainFrame)} }
+    function stopRain() {if (rainRaf !== null) {cancelAnimationFrame(rainRaf); rainRaf = null} }
+
+    /* ---------- Lightning (no sound) ---------- */
+    // One flash peak per strike, and a double strike is spaced ≥350 ms apart: at most 2 full-screen flashes per second.
+    const boltEl = $('bolt'), boltPath = $('boltPath'), glowEl = $('glow');
+    function makeBolt() {
+      let x = 130, y = 0, path = `M${x} ${y}`;
+      while (y < 470) {
+        x += Math.random() * 90 - 45; y += 25 + Math.random() * 55;
+        path += ` L${Math.max(20, Math.min(280, x))} ${y}`;
+        if (Math.random() < .23) {
+          const bx = x, by = y;
+          path += ` M${bx} ${by} l${Math.random() * 45 + 10} ${Math.random() * 45 + 12} M${bx} ${by} l${-Math.random() * 45 - 10} ${Math.random() * 45 + 12} M${bx} ${by}`;
+        }
+      }
+      boltPath.setAttribute('d', path);
+    }
+    let lightningTimers = [];
+    function later(fn, ms) {
+      const id = setTimeout(() => {lightningTimers = lightningTimers.filter(x => x !== id); if (shouldAnimate()) fn()}, ms);
+      lightningTimers.push(id);
+    }
+    function clearLightning() {
+      lightningTimers.forEach(clearTimeout); lightningTimers = [];
+      boltEl.style.opacity = '0'; glowEl.classList.remove('flash');
+    }
+    function strike(opacity, hideMs) {
+      makeBolt();
+      boltEl.style.opacity = opacity;
+      glowEl.classList.remove('flash'); void glowEl.offsetWidth; glowEl.classList.add('flash');   // restart the CSS animation
+      later(() => {boltEl.style.opacity = '0'}, hideMs);
+    }
+    function lightning() {
+      strike('.95', 100 + Math.random() * 160);
+      if (Math.random() < .48) later(() => strike('.9', 100), 350 + Math.random() * 250);
+      later(lightning, 6500 + Math.random() * 11500);
+    }
+    function startLightning() {if (!lightningTimers.length) later(lightning, 2500 + Math.random() * 3500)}
+
+    /* ---------- Visibility / motion state ---------- */
+    function updateActivity() {
+      const visible = isActive();
+      document.body.classList.toggle('paused', !visible);
+      if (visible) {
+        startClock();
+        if (reduceMotion) {stopRain(); clearLightning(); drawRain(0)}   // reduced motion: one static frame, no flashes
+        else {startRain(); startLightning()}
+        scheduleWeatherRefresh();   // fires immediately if the data went stale while hidden
+      } else {
+        stopClock(); stopRain(); clearLightning(); stopWeatherTimer();
+      }
+    }
+    document.addEventListener('visibilitychange', updateActivity);
+    const onMotionChange = e => {reduceMotion = e.matches; updateActivity()};
+    if (motionQuery.addEventListener) motionQuery.addEventListener('change', onMotionChange); else if (motionQuery.addListener) motionQuery.addListener(onMotionChange);
+    let resizeTimer = 0;
+    addEventListener('resize', () => {
+      clearTimeout(resizeTimer);
+      resizeTimer = setTimeout(() => {resize(); if (reduceMotion && isActive()) drawRain(0)}, 150);
+    });
+    addEventListener('online', () => {if (lastCoords && isActive() && failCount > 0) refreshWeather()});
+
+    resize();
+    initLocation();
+    updateActivity();
+  </script>
+</body>
+
+</html>

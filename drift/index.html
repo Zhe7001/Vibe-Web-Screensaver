@@ -1,0 +1,881 @@
+<!doctype html>
+<html lang="en">
+
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#050914">
+  <meta http-equiv="Content-Security-Policy"
+    content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src https://api.open-meteo.com; base-uri 'none'; form-action 'none'">
+  <meta name="description" content="DRIFT — a quiet night sky to drift into sleep.">
+  <title>DRIFT — Your vibe. Your weather.</title>
+  <link rel="icon"
+    href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='16' fill='%23050914'/%3E%3Ccircle cx='32' cy='32' r='3' fill='%23e1e9ff'/%3E%3Ccircle cx='18' cy='18' r='1.5' fill='%2397a9d4'/%3E%3Ccircle cx='47' cy='43' r='1.5' fill='%2397a9d4'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      color-scheme: dark;
+      --ink: #e8edff;
+      --dim: #a3aecb;
+      --cloud: 0.12;
+      --aurora-opacity: 0.88;
+    }
+
+    * {
+      box-sizing: border-box
+    }
+
+    html,
+    body {
+      margin: 0;
+      width: 100%;
+      height: 100%;
+      overflow: hidden;
+      background: #050914;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif
+    }
+
+    body {
+      isolation: isolate
+    }
+
+    /* ---------- Фоновые слои ---------- */
+    #sky {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      display: block;
+      z-index: 1
+    }
+
+    #meteorCanvas {
+      position: fixed;
+      inset: 0;
+      width: 100%;
+      height: 100%;
+      pointer-events: none;
+      z-index: 2
+    }
+
+    .space {
+      position: fixed;
+      inset: -12%;
+      pointer-events: none;
+      background:
+        radial-gradient(ellipse at 68% 42%, rgba(35, 65, 112, .28), transparent 44%),
+        radial-gradient(ellipse at 12% 82%, rgba(24, 47, 79, .2), transparent 48%),
+        linear-gradient(180deg, #050812 0%, #080e20 53%, #070b17 100%);
+      z-index: -2
+    }
+
+    .haze {
+      position: fixed;
+      inset: -30%;
+      pointer-events: none;
+      z-index: -1;
+      opacity: calc(.22 + var(--cloud)*0.55);
+      transition: opacity 3s ease;
+      background:
+        radial-gradient(ellipse at 28% 38%, rgba(69, 91, 139, .20), transparent 35%),
+        radial-gradient(ellipse at 72% 66%, rgba(39, 63, 112, .22), transparent 37%),
+        radial-gradient(ellipse at 53% 18%, rgba(71, 79, 130, .10), transparent 32%);
+      animation: drift 110s ease-in-out infinite alternate
+    }
+
+    .vignette {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      background: linear-gradient(90deg, rgba(3, 8, 18, .40), transparent 76%), radial-gradient(ellipse at center, transparent 25%, rgba(1, 3, 10, .30) 100%);
+      z-index: 1
+    }
+
+    .grain {
+      position: fixed;
+      inset: 0;
+      pointer-events: none;
+      opacity: .035;
+      z-index: 2;
+      background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.45'/%3E%3C/svg%3E")
+    }
+
+    .nebula-layer {
+      position: fixed;
+      inset: -18%;
+      z-index: 0;
+      pointer-events: none;
+      overflow: hidden;
+      opacity: .72;
+    }
+
+    .nebula {
+      position: absolute;
+      border-radius: 50%;
+      transform: rotate(var(--rotation, 0deg));
+      will-change: transform
+    }
+
+    .nebula.n1 {
+      width: 48vw;
+      height: 22vw;
+      left: 18%;
+      top: 14%;
+      background: radial-gradient(ellipse at 40% 50%, rgba(72, 103, 177, .12), rgba(51, 76, 145, .07) 38%, rgba(22, 42, 91, 0) 72%);
+      animation: nebula-drift 145s ease-in-out infinite alternate
+    }
+
+    .nebula.n2 {
+      width: 42vw;
+      height: 30vw;
+      left: 55%;
+      top: 43%;
+      background: radial-gradient(ellipse at 50% 50%, rgba(94, 77, 167, .11), rgba(43, 67, 133, .06) 42%, rgba(20, 34, 78, 0) 72%);
+      animation: nebula-drift 180s ease-in-out infinite alternate-reverse
+    }
+
+    .nebula.n3 {
+      width: 38vw;
+      height: 24vw;
+      left: 4%;
+      top: 58%;
+      background: radial-gradient(ellipse at 45% 45%, rgba(39, 91, 151, .10), rgba(30, 59, 116, .05) 45%, rgba(15, 30, 65, 0) 75%);
+      animation: nebula-drift 160s ease-in-out infinite alternate
+    }
+
+    /* ---------- Новый лёгкий слой сияния ---------- */
+    .glow-layer {
+      position: fixed;
+      inset: -20%;
+      z-index: 0;
+      pointer-events: none;
+      opacity: var(--aurora-opacity);
+      transition: opacity 3s ease;
+      background:
+        radial-gradient(ellipse 60% 40% at 20% 30%, rgba(80, 140, 220, 0.08), transparent 70%),
+        radial-gradient(ellipse 50% 50% at 80% 20%, rgba(140, 100, 220, 0.06), transparent 70%),
+        radial-gradient(ellipse 70% 30% at 30% 70%, rgba(60, 180, 180, 0.05), transparent 70%);
+      animation: glow-pulse 25s ease-in-out infinite alternate;
+    }
+
+    /* ---------- Интерфейс ---------- */
+    header {
+      position: fixed;
+      z-index: 4;
+      left: clamp(26px, 5vw, 76px);
+      top: calc(26px + env(safe-area-inset-top, 0px));
+      right: clamp(26px, 5vw, 76px);
+      pointer-events: none;
+      text-align: left;
+      text-shadow: 0 0 18px #060a16, 0 0 4px #060a16
+    }
+
+    .brand {
+      margin: 0;
+      font-size: 12px;
+      font-weight: 600;
+      letter-spacing: .28em;
+      text-transform: uppercase;
+      color: #c9d3ee;
+      line-height: 1.4
+    }
+
+    .eyebrow {
+      margin: 8px 0 0;
+      font-size: 12px;
+      letter-spacing: .2em;
+      text-transform: uppercase;
+      color: var(--dim);
+      line-height: 1.4
+    }
+
+    .info {
+      position: fixed;
+      z-index: 3;
+      left: clamp(24px, 5vw, 76px);
+      bottom: clamp(30px, 6vh, 70px);
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      pointer-events: none;
+      text-shadow: 0 1px 22px #02040c;
+      max-width: min(760px, calc(100vw - 48px))
+    }
+
+    .info:before {
+      content: "";
+      position: absolute;
+      z-index: -1;
+      inset: -60px -90px -60px -60px;
+      background: radial-gradient(ellipse closest-side at 36% 50%, rgba(5, 13, 28, .38), rgba(5, 13, 28, .16) 62%, transparent);
+      pointer-events: none
+    }
+
+    .clock {
+      font-variant-numeric: tabular-nums;
+      font-size: clamp(64px, 10.5vw, 132px);
+      font-weight: 300;
+      letter-spacing: -.055em;
+      line-height: 1.02;
+      color: rgba(207, 218, 241, .84);
+      margin: 18px 0 10px;
+      white-space: nowrap;
+      text-shadow: 0 1px 18px rgba(2, 4, 12, .28)
+    }
+
+    .clock .seconds {
+      display: inline-block;
+      font-size: .28em;
+      line-height: 1;
+      font-weight: 300;
+      letter-spacing: 0;
+      color: rgba(154, 177, 211, .72);
+      vertical-align: top;
+      position: relative;
+      margin: clamp(8px, 1.1vw, 16px) 0 0 clamp(8px, 1.1vw, 16px)
+    }
+
+    .date {
+      font-size: clamp(15px, 1.65vw, 21px);
+      letter-spacing: -.015em;
+      color: rgba(174, 190, 215, .82);
+      line-height: 1.45;
+      margin-top: clamp(4px, .7vw, 10px)
+    }
+
+    .weather {
+      margin-top: clamp(14px, 1.8vw, 24px);
+      display: flex;
+      align-items: center;
+      flex-wrap: wrap;
+      gap: clamp(10px, 1.3vw, 16px);
+      color: rgba(182, 193, 219, .78);
+      font-size: clamp(13px, 1.35vw, 17px);
+      letter-spacing: .01em;
+      line-height: 1.6;
+      min-height: 24px
+    }
+
+    .weather .separator {
+      width: 1px;
+      height: 27px;
+      background: #a8c2df88;
+      margin: 0 3px
+    }
+
+    .weather .condition {
+      color: #9baec7
+    }
+
+    .weather {
+      transition: opacity 1s ease
+    }
+
+    .weather.stale {
+      opacity: .55
+    }
+
+    .weather.no-temp #temp,
+    .weather.no-temp .separator {
+      display: none
+    }
+
+    /* ---------- Keyframes ---------- */
+    @keyframes drift {
+      0% {
+        transform: translate3d(-1.5%, -.5%, 0) rotate(-2deg) scale(1)
+      }
+
+      100% {
+        transform: translate3d(1.5%, .8%, 0) rotate(2deg) scale(1.04)
+      }
+    }
+
+    @keyframes nebula-drift {
+      0% {
+        transform: translate3d(-1.2%, -.5%, 0) rotate(-2deg) scale(1)
+      }
+
+      100% {
+        transform: translate3d(1.4%, 1%, 0) rotate(2deg) scale(1.04)
+      }
+    }
+
+    @keyframes glow-pulse {
+      0% {
+        transform: translate3d(-1%, -1%, 0) scale(1)
+      }
+
+      100% {
+        transform: translate3d(1%, 1%, 0) scale(1.05)
+      }
+    }
+
+    /* ---------- Адаптивность ---------- */
+    @media(max-width:650px) {
+      header {
+        left: 18px;
+        right: 18px;
+        top: calc(20px + env(safe-area-inset-top, 0px))
+      }
+
+      .info {
+        bottom: 32px;
+        left: 16px;
+        max-width: calc(100% - 32px)
+      }
+
+      .clock {
+        font-size: clamp(58px, 14vw, 92px);
+        line-height: 1.02;
+        margin: 14px 0 6px
+      }
+
+      .weather {
+        font-size: 13px
+      }
+    }
+
+    /* ---------- Reduced Motion ---------- */
+    @media(prefers-reduced-motion:reduce) {
+
+      .haze,
+      .nebula,
+      .glow-layer {
+        animation: none !important;
+      }
+
+      .grain {
+        opacity: .02
+      }
+    }
+  </style>
+</head>
+
+<body>
+  <div class="space"></div>
+  <div class="haze" id="haze"></div>
+
+  <div class="nebula-layer" aria-hidden="true">
+    <div class="nebula n1"></div>
+    <div class="nebula n2"></div>
+    <div class="nebula n3"></div>
+  </div>
+
+  <div class="glow-layer" aria-hidden="true"></div>
+
+  <canvas id="sky" aria-hidden="true"></canvas>
+  <canvas id="meteorCanvas" aria-hidden="true"></canvas>
+  <div class="vignette"></div>
+  <div class="grain"></div>
+
+  <header aria-label="DRIFT">
+    <h1 class="brand">Drift</h1>
+    <p class="eyebrow">Your vibe. Your weather.</p>
+  </header>
+
+  <main class="info" aria-label="Local time and weather">
+    <time class="clock" id="clock"><span id="hm">--:--</span><span class="seconds" id="sec">--</span></time>
+    <div class="date" id="date">Loading date…</div>
+    <div class="weather no-temp" id="weatherRow"><span aria-hidden="true">☾</span><span id="temp">—°C</span><span
+        class="separator"></span><span class="condition" id="weatherText">Listening to the night</span></div>
+  </main>
+
+  <script>
+    (() => {
+      'use strict';
+
+      const canvas = document.getElementById('sky');
+      const ctx = canvas.getContext('2d', {alpha: true});
+      const meteorCanvas = document.getElementById('meteorCanvas');
+      const mctx = meteorCanvas.getContext('2d');
+      const hmEl = document.getElementById('hm');
+      const secEl = document.getElementById('sec');
+      const clockEl = document.getElementById('clock');
+      const dateEl = document.getElementById('date');
+      const weatherRow = document.getElementById('weatherRow');
+      const weatherText = document.getElementById('weatherText');
+      const tempEl = document.getElementById('temp');
+      const root = document.documentElement;
+      const reducedMotion = matchMedia('(prefers-reduced-motion: reduce)');
+
+      /* ============ Настройки ============ */
+      const ROTATION_PERIOD_S = 1800;       // полный оборот неба вокруг Полярной звезды за 30 минут
+      const SKY_FRAME_MS = 83;              // ≈12 кадров/с: звёзды движутся и «дышат» очень медленно
+      const WEATHER_REFRESH_MS = 15 * 60 * 1000;
+      const RETRY_MS = [60e3, 120e3, 300e3]; // повторы после сбоя: 1, 2, затем 5 минут
+      const FETCH_TIMEOUT_MS = 10000;
+      const CULL = 24;                      // запас за краем экрана, px
+      const CLOUD_DIM_WEAK = .6;            // насколько облака гасят слабые звёзды (при 100% облачности остаётся 40%)
+      const CLOUD_DIM_BRIGHT = .35;         // и яркие (остаётся 65%)
+      const HALO_MIN_R = .8;                // звёзды крупнее этого радиуса рисуются с ореолом (≈ ярче 2-й величины)
+
+      let width = 0, height = 0, dpr = 1;
+      let pivotX = 0, pivotY = 0, fieldR = 0;
+      let cloudTarget = 0.12, cloudCur = 0.12;
+      let coords = null;
+      let meteors = [], meteorTimer = 0, meteorRaf = 0, lastMeteorTs = 0;
+      let skyTimer = 0, lastSkyTs = 0;
+
+      const SIN_LUT = new Float32Array(1024);
+      for (let i = 0; i < 1024; i++) SIN_LUT[i] = Math.sin(i / 1024 * Math.PI * 2);
+      const TAU = Math.PI * 2;
+      const sinAt = a => SIN_LUT[((a % TAU) / TAU * 1024) | 0];
+
+      /* ============ Каталог: яркие звёзды (RA в часах, Dec в градусах, звёздная величина) ============ */
+      const catalogue = [
+        ['Sirius', 6.752, -16.716, -1.46], ['Canopus', 6.399, -52.696, -0.74],
+        ['Arcturus', 14.261, 19.182, -0.05], ['Vega', 18.616, 38.784, 0.03],
+        ['Capella', 5.278, 45.998, 0.08], ['Rigel', 5.242, -8.202, 0.13],
+        ['Procyon', 7.655, 5.225, 0.34], ['Betelgeuse', 5.919, 7.407, 0.42],
+        ['Altair', 19.846, 8.868, 0.77], ['Aldebaran', 4.599, 16.509, 0.85],
+        ['Spica', 13.420, -11.161, 0.98], ['Antares', 16.490, -26.432, 1.06],
+        ['Pollux', 7.755, 28.026, 1.14], ['Fomalhaut', 22.961, -29.622, 1.16],
+        ['Deneb', 20.690, 45.280, 1.25], ['Regulus', 10.139, 11.967, 1.35],
+        ['Adhara', 6.977, -28.972, 1.50], ['Castor', 7.577, 31.888, 1.58],
+        ['Bellatrix', 5.419, 6.350, 1.64], ['Elnath', 5.438, 28.608, 1.65],
+        ['Miaplacidus', 9.220, -69.717, 1.67], ['Alnilam', 5.603, -1.202, 1.69],
+        ['Alnitak', 5.679, -1.943, 1.74], ['Mintaka', 5.533, -0.299, 2.23],
+        ['Polaris', 2.530, 89.264, 1.98], ['Dubhe', 11.062, 61.751, 1.79],
+        ['Merak', 11.031, 56.382, 2.37], ['Alkaid', 13.792, 49.313, 1.86],
+        ['Mizar', 13.399, 54.925, 2.23], ['Alioth', 12.900, 55.960, 1.77],
+        ['Kochab', 14.845, 74.155, 2.08], ['Schedar', 0.675, 56.537, 2.24],
+        ['Alpheratz', 0.140, 29.091, 2.06], ['Mirfak', 3.405, 49.861, 1.79],
+        ['Algol', 3.136, 40.956, 2.12], ['Menkalinan', 6.383, 44.947, 1.90],
+        ['Saiph', 5.796, -9.670, 2.06], ['Wezen', 7.140, -26.393, 1.83],
+        ['Gienah', 12.263, -17.542, 2.59], ['Rasalhague', 17.582, 12.560, 2.08],
+        ['Nunki', 18.921, -26.297, 2.02], ['Kaus Australis', 18.402, -34.384, 1.79],
+        ['Shaula', 17.560, -37.104, 1.62], ['Sadr', 20.370, 40.257, 2.23],
+        ['Albireo', 19.512, 27.960, 3.08], ['Alphecca', 15.578, 26.715, 2.23],
+        ['Enif', 21.736, 9.875, 2.39], ['Markab', 23.079, 15.205, 2.49],
+        ['Scheat', 23.063, 28.083, 2.42], ['Phecda', 11.897, 53.694, 2.44],
+        ['Megrez', 12.257, 57.033, 3.31], ['Thuban', 14.073, 64.376, 3.65],
+        ['Caph', 0.153, 59.150, 2.27], ['Ruchbah', 1.430, 60.235, 2.68],
+        ['Mirach', 1.163, 35.621, 2.05], ['Hamal', 2.119, 23.462, 2.00],
+        ['Menkar', 3.038, 4.090, 2.54], ['Zosma', 11.235, 20.524, 2.56],
+        ['Denebola', 11.818, 14.572, 2.14], ['Vindemiatrix', 13.036, 10.959, 2.83],
+        ['Izar', 14.749, 27.074, 2.37], ['Unukalhai', 15.738, 6.426, 2.63],
+        ['Kornephoros', 16.504, 21.490, 2.77], ['Eltanin', 17.943, 51.489, 2.23],
+        ['Rastaban', 17.507, 52.301, 2.79], ['Alrescha', 2.034, 2.764, 3.82],
+        ['Diphda', 0.726, -17.987, 2.02], ['Ankaa', 0.438, -42.306, 2.40],
+        ['Acrux', 12.443, -63.099, 0.76], ['Mimosa', 12.795, -59.689, 1.25],
+        ['Gacrux', 12.519, -57.113, 1.63], ['Peacock', 20.427, -56.735, 1.94],
+        ['Atria', 16.811, -69.028, 1.91], ['Alnair', 22.137, -46.961, 1.74],
+        ['Rigil Kentaurus', 14.660, -60.835, -0.27], ['Hadar', 14.064, -60.373, 0.61],
+        ['Alhena', 6.629, 16.399, 1.93], ['Mekbuda', 7.068, 20.570, 3.79],
+        ['Wasat', 7.335, 21.982, 3.53], ['Alzirr', 6.754, 12.896, 2.10],
+        ['Gomeisa', 7.453, 8.289, 2.89], ['Naos', 8.060, -40.003, 2.21],
+        ['Regor', 8.159, -47.337, 1.78], ['Avior', 8.375, -59.510, 1.86],
+        ['Suhail', 9.133, -43.433, 2.21], ['Turais', 9.284, -59.275, 2.25],
+        ['Alphard', 9.460, -8.659, 1.98], ['Talitha', 8.986, 48.041, 3.14],
+        ['Cor Caroli', 12.934, 38.318, 2.89], ['Alkes', 10.996, -18.299, 3.83],
+        ['Zavijava', 11.845, 1.765, 3.59], ['Porrima', 12.694, -1.449, 2.74],
+        ['Auva', 12.900, 3.398, 3.38], ['Heze', 13.036, -1.957, 3.38],
+        ['Zaniah', 12.376, -0.008, 3.89], ['Syrmus', 12.770, -11.493, 4.13],
+        ['Sadalmelik', 22.096, -0.320, 2.96], ['Sadalsuud', 21.526, -5.571, 2.87],
+        ['Skat', 22.911, -15.821, 3.27], ['Ancha', 22.280, -7.784, 4.17],
+        ['Albali', 20.795, -9.496, 3.77], ['Nashira', 21.668, -16.662, 3.68],
+        ['Dabih', 20.349, -14.871, 3.05], ['Algedi', 20.301, -12.545, 3.57],
+        ['Tarazed', 19.771, 10.613, 2.72], ['Alshain', 19.922, 6.407, 3.71],
+        ['Sheliak', 18.834, 33.363, 3.52], ['Sulafat', 18.982, 32.690, 3.25],
+        ['Alderamin', 21.310, 62.586, 2.45], ['Errai', 23.656, 77.632, 3.21],
+        ['Alfirk', 21.477, 70.561, 3.23], ['Kurhah', 22.830, 66.202, 4.19],
+        ['Segin', 1.906, 63.670, 3.35], ['Achird', 0.816, 57.815, 3.44],
+        ['Almach', 2.065, 42.330, 2.10], ['Adhil', 1.038, 45.440, 4.27],
+        ['Nembus', 0.938, 48.330, 4.50], ['Seginus', 14.535, 38.308, 3.03],
+        ['Nekkar', 15.032, 40.391, 3.49], ['Alkalurops', 15.408, 37.377, 4.32],
+        ['Muphrid', 13.911, 18.398, 2.68], ['Merga', 14.817, 30.372, 4.35],
+        ['Zubenelgenubi', 14.848, -16.042, 2.75], ['Zubeneschamali', 15.283, -9.383, 2.61],
+        ['Yed Prior', 16.239, -3.694, 2.73], ['Yed Posterior', 16.257, -3.694, 3.24],
+        ['Marfik', 16.618, -1.983, 3.82], ['Cebalrai', 17.724, 4.567, 2.77],
+        ['Sabik', 17.173, -15.725, 2.43], ['Sarin', 17.250, 24.839, 3.12],
+        ['Maasym', 17.865, 22.773, 4.34], ['Alchiba', 12.247, -8.819, 4.02],
+        ['Algorab', 12.498, -16.515, 2.95], ['Kraz', 12.573, -23.396, 2.65],
+        ['Menkent', 14.111, -36.370, 2.06], ['Muhlifain', 12.692, -48.960, 2.20],
+        ['Imai', 12.252, -58.749, 2.79], ['Sargas', 17.622, -42.998, 1.86],
+        ['Dschubba', 16.005, -22.622, 2.29], ['Acrab', 16.090, -19.805, 2.56],
+        ['Fang', 15.981, -26.114, 2.89], ['Alniyat', 16.353, -25.593, 3.10],
+        ['Lesath', 17.512, -37.296, 2.70]
+      ];
+
+      function seeded(seed) {let x = seed >>> 0; return () => {x = (x * 1664525 + 1013904223) >>> 0; return x / 4294967296}}
+
+      /* ============ Звёзды ============
+         Небо смотрит на север: полюс вращения (Полярная) стоит в точке pivot, остальное поле вращается вокруг него.
+         Звёзды хранятся как смещение от полюса (sX, sY, px) и поворачиваются на общий угол при отрисовке. */
+      let starCount = 0;
+      let sX, sY, sR, sA, sPhase, sSpeed;
+      let brightList = [];
+      let bucketLists = [[], [], [], []];
+
+      function makeStars() {
+        const rand = seeded(70021);
+        const K = fieldR / 130;                          // px на градус склонения: в поле попадают звёзды до Dec ≈ −40°
+        const cat = catalogue.filter(s => s[2] >= -40);
+        const extra = Math.min(4200, Math.floor(Math.PI * fieldR * fieldR / 1800));   // та же плотность, что на экране
+        const total = cat.length + extra;
+        sX = new Float32Array(total); sY = new Float32Array(total);
+        sR = new Float32Array(total); sA = new Float32Array(total);
+        sPhase = new Float32Array(total); sSpeed = new Float32Array(total);
+
+        let i = 0;
+        for (const [, ra, dec, mag] of cat) {
+          const r = (90 - dec) * K;
+          const th = ra / 24 * TAU + 0.13 * TAU;
+          sX[i] = r * Math.cos(th); sY[i] = r * Math.sin(th);
+          sR[i] = Math.max(.65, 2.45 - (mag + 1.5) * .48);
+          sA[i] = Math.max(.15, Math.min(.92, 1.05 - (mag + 1.5) * .19));
+          sPhase[i] = rand() * TAU;
+          sSpeed[i] = .12 + rand() * .18;
+          i++;
+        }
+        for (let k = 0; k < extra; k++) {
+          const r = fieldR * Math.sqrt(rand()), th = rand() * TAU;   // равномерно по площади круга
+          sX[i] = r * Math.cos(th); sY[i] = r * Math.sin(th);
+          sR[i] = .5 + rand() * .7;
+          sA[i] = .10 + rand() * .26;
+          sPhase[i] = rand() * TAU;
+          sSpeed[i] = .06 + rand() * .14;
+          i++;
+        }
+        starCount = i;
+
+        brightList = [];
+        bucketLists = [[], [], [], []];
+        for (let j = 0; j < starCount; j++) {
+          if (sR[j] > HALO_MIN_R) {brightList.push(j); continue;}
+          bucketLists[Math.min(3, (sA[j] * 4) | 0)].push(j);
+        }
+      }
+
+      /* ============ Resize ============ */
+      function resize() {
+        dpr = Math.min(devicePixelRatio || 1, 2);
+        width = innerWidth; height = innerHeight;
+        canvas.width = Math.round(width * dpr); canvas.height = Math.round(height * dpr);
+        canvas.style.width = width + 'px'; canvas.style.height = height + 'px';
+        ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        meteorCanvas.width = Math.round(width * dpr); meteorCanvas.height = Math.round(height * dpr);
+        meteorCanvas.style.width = width + 'px'; meteorCanvas.style.height = height + 'px';
+        mctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+        pivotX = width * 0.68; pivotY = height * 0.30;   // полюс вращения — справа сверху, подальше от текста
+        fieldR = Math.hypot(Math.max(pivotX, width - pivotX), Math.max(pivotY, height - pivotY)) + 30;
+        makeStars();
+        draw(performance.now());
+      }
+
+      /* ============ Отрисовка неба ============ */
+      // Угол привязан к настенным часам: после перезагрузки или возврата на вкладку небо продолжает с того же места.
+      const skyAngle = () => reducedMotion.matches ? 0 : -TAU * ((Date.now() / 1000) % ROTATION_PERIOD_S) / ROTATION_PERIOD_S;   // против часовой, как вокруг Полярной
+
+      function draw(now) {
+        ctx.clearRect(0, 0, width, height);
+        const time = now / 1000;
+        const scale = Math.max(width / 1500, height / 850);
+        const still = reducedMotion.matches;
+        const ang = skyAngle(), cs = Math.cos(ang), sn = Math.sin(ang);
+        const weakVis = 1 - cloudCur * CLOUD_DIM_WEAK;       // облака прячут слабые звёзды первыми, но небо не пустеет
+        const brightVis = 1 - cloudCur * CLOUD_DIM_BRIGHT;   // яркие остаются заметными
+        const xMin = -CULL, xMax = width + CULL, yMin = -CULL, yMax = height + CULL;
+
+        // --- Слабые звёзды: 4 батча по альфа-бакетам ---
+        ctx.fillStyle = 'rgba(180,198,238,1)';
+        for (let b = 0; b < 4; b++) {
+          const list = bucketLists[b];
+          if (!list.length) continue;
+          ctx.globalAlpha = (0.28 + b * 0.14) * weakVis;
+          ctx.beginPath();
+          for (let k = 0; k < list.length; k++) {
+            const j = list[k];
+            const x = pivotX + sX[j] * cs - sY[j] * sn;
+            const y = pivotY + sX[j] * sn + sY[j] * cs;
+            if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
+            const twk = still ? 1 : .78 + .22 * sinAt(time * sSpeed[j] + sPhase[j]);
+            const r = Math.max(.55, sR[j] * scale * .8 * twk);
+            ctx.moveTo(x + r, y);
+            ctx.arc(x, y, r, 0, TAU);
+          }
+          ctx.fill();
+        }
+        ctx.globalAlpha = 1;
+
+        // --- Яркие звёзды: точечно, с гало и лучами у самых ярких ---
+        for (let n = 0; n < brightList.length; n++) {
+          const j = brightList[n];
+          const x = pivotX + sX[j] * cs - sY[j] * sn;
+          const y = pivotY + sX[j] * sn + sY[j] * cs;
+          if (x < xMin || x > xMax || y < yMin || y > yMax) continue;
+          const wave = sinAt(time * sSpeed[j] + sPhase[j]);
+          const twinkle = still ? 1 : .78 + .22 * wave;
+          const pulse = still ? 1 : .94 + .06 * wave;
+          const alpha = Math.min(1, sA[j] * 1.3) * twinkle * brightVis;
+          const radius = sR[j] * scale;
+          if (radius <= 0.5) continue;
+          const core = Math.max(.7, radius * .48);
+          const ray = radius * (sR[j] > 2.15 ? 2.8 : 1.65);
+          const haloRadius = radius * (sR[j] > 2.15 ? 5.0 : 3.2);
+
+          ctx.globalAlpha = alpha * .18 * pulse;
+          ctx.fillStyle = 'rgba(150,180,255,1)';
+          ctx.beginPath(); ctx.arc(x, y, haloRadius, 0, TAU); ctx.fill();
+
+          ctx.globalAlpha = alpha * .26 * pulse;
+          ctx.fillStyle = 'rgba(193,215,255,1)';
+          ctx.beginPath(); ctx.arc(x, y, haloRadius * .5, 0, TAU); ctx.fill();
+
+          ctx.globalAlpha = alpha * pulse;
+          ctx.fillStyle = 'rgba(233,241,255,1)';
+          ctx.beginPath(); ctx.arc(x, y, core, 0, TAU); ctx.fill();
+          ctx.globalAlpha = 1;
+
+          if (sR[j] > 2.15) {
+            const rayGradV = ctx.createLinearGradient(x, y - ray, x, y + ray);
+            rayGradV.addColorStop(0, 'rgba(220,233,255,0)');
+            rayGradV.addColorStop(.48, `rgba(220,233,255,${alpha * .42})`);
+            rayGradV.addColorStop(.52, `rgba(255,255,255,${alpha * .65})`);
+            rayGradV.addColorStop(1, 'rgba(220,233,255,0)');
+            ctx.strokeStyle = rayGradV; ctx.lineWidth = .65;
+            ctx.beginPath(); ctx.moveTo(x, y - ray); ctx.lineTo(x, y + ray); ctx.stroke();
+
+            const rayGradH = ctx.createLinearGradient(x - ray * .72, y, x + ray * .72, y);
+            rayGradH.addColorStop(0, 'rgba(220,233,255,0)');
+            rayGradH.addColorStop(.5, `rgba(220,233,255,${alpha * .22})`);
+            rayGradH.addColorStop(1, 'rgba(220,233,255,0)');
+            ctx.strokeStyle = rayGradH; ctx.lineWidth = .45;
+            ctx.beginPath(); ctx.moveTo(x - ray * .72, y); ctx.lineTo(x + ray * .72, y); ctx.stroke();
+          }
+        }
+      }
+
+      /* ============ Облачность ============ */
+      function stepCloud(dt) {   // плавный переход, без скачка при смене погоды
+        const d = cloudTarget - cloudCur;
+        cloudCur = Math.abs(d) < .002 ? cloudTarget : cloudCur + d * Math.min(1, dt / 3);
+      }
+      function setCloud(code, pct) {
+        const fog = code === 45 || code === 48;   // туман скрывает звёзды, даже если cloud_cover маленький
+        cloudTarget = Math.max(Math.max(0, Math.min(1, (pct || 0) / 100)), fog ? .7 : 0);
+        root.style.setProperty('--cloud', cloudTarget.toFixed(2));
+        root.style.setProperty('--aurora-opacity', (1 - cloudTarget).toFixed(2));
+        if (reducedMotion.matches) {cloudCur = cloudTarget; if (!document.hidden) draw(performance.now());}
+      }
+
+      /* ============ Цикл неба (≈12 fps, без rAF) ============ */
+      function skyLoop() {
+        skyTimer = 0;
+        if (document.hidden || reducedMotion.matches) return;
+        const ts = performance.now();
+        const dt = lastSkyTs ? Math.min((ts - lastSkyTs) / 1000, .5) : 0;
+        lastSkyTs = ts;
+        stepCloud(dt);
+        draw(ts);
+        skyTimer = setTimeout(skyLoop, SKY_FRAME_MS);
+      }
+      function startSky() {if (!skyTimer && !document.hidden && !reducedMotion.matches) {lastSkyTs = 0; skyLoop();} }
+      function stopSky() {if (skyTimer) {clearTimeout(skyTimer); skyTimer = 0;} lastSkyTs = 0;}
+
+      /* ============ Метеоры (rAF только пока метеор в полёте) ============ */
+      function spawnMeteor() {
+        if (document.hidden || reducedMotion.matches) return;
+        if (Math.random() < cloudTarget * .8) return;   // сквозь плотные облака метеоров почти не видно
+        const angle = (48 + Math.random() * 12) * Math.PI / 180;
+        const speed = 250 + Math.random() * 100;
+        const duration = 0.7 + Math.random() * .35;
+        const x = Math.random() * width * .82 + width * .08;
+        const y = Math.random() * height * .38;
+        meteors.push({
+          x, y,
+          vx: Math.cos(angle) * speed,
+          vy: Math.sin(angle) * speed,
+          length: 65 + Math.random() * 45,
+          speed,
+          age: 0,
+          life: duration
+        });
+        if (!meteorRaf) {lastMeteorTs = 0; meteorRaf = requestAnimationFrame(meteorFrame);}
+      }
+
+      function drawMeteors(dt) {
+        mctx.clearRect(0, 0, width, height);
+        for (let i = meteors.length - 1; i >= 0; i--) {
+          const m = meteors[i];
+          m.age += dt;
+          m.x += m.vx * dt;
+          m.y += m.vy * dt;
+          const progress = m.age / m.life;
+          if (progress >= 1) {meteors.splice(i, 1); continue;}
+
+          const fade = Math.min(1, progress * 7, (1 - progress) * 4);
+          const tailX = m.x - m.vx * (m.length / m.speed);
+          const tailY = m.y - m.vy * (m.length / m.speed);
+
+          const grad = mctx.createLinearGradient(tailX, tailY, m.x, m.y);
+          grad.addColorStop(0, 'rgba(190,216,255,0)');
+          grad.addColorStop(.7, `rgba(190,216,255,${.42 * fade})`);
+          grad.addColorStop(1, `rgba(242,248,255,${.95 * fade})`);
+          mctx.strokeStyle = grad; mctx.lineWidth = 1.25; mctx.lineCap = 'round';
+          mctx.beginPath(); mctx.moveTo(tailX, tailY); mctx.lineTo(m.x, m.y); mctx.stroke();
+
+          const g = mctx.createRadialGradient(m.x, m.y, 0, m.x, m.y, 4);
+          g.addColorStop(0, `rgba(245,249,255,${fade})`);
+          g.addColorStop(1, 'rgba(165,202,255,0)');
+          mctx.fillStyle = g;
+          mctx.beginPath(); mctx.arc(m.x, m.y, 4, 0, TAU); mctx.fill();
+        }
+      }
+
+      function meteorFrame(ts) {
+        meteorRaf = 0;
+        if (document.hidden || reducedMotion.matches) {stopMeteors(); return;}
+        const dt = lastMeteorTs ? Math.min((ts - lastMeteorTs) / 1000, .05) : 0;
+        lastMeteorTs = ts;
+        drawMeteors(dt);
+        if (meteors.length) meteorRaf = requestAnimationFrame(meteorFrame);   // иначе цикл остановился, canvas уже чист
+      }
+      function stopMeteors() {
+        if (meteorRaf) {cancelAnimationFrame(meteorRaf); meteorRaf = 0;}
+        meteors = []; lastMeteorTs = 0;
+        mctx.clearRect(0, 0, width, height);
+      }
+      function clearMeteorTimer() {if (meteorTimer) {clearTimeout(meteorTimer); meteorTimer = 0;} }
+      function scheduleMeteor() {
+        clearMeteorTimer();
+        if (document.hidden || reducedMotion.matches) return;
+        meteorTimer = setTimeout(() => {spawnMeteor(); scheduleMeteor();}, 20000 + Math.random() * 25000);
+      }
+
+      /* ============ Часы ============ */
+      const dateFmt = new Intl.DateTimeFormat('en-US', {weekday: 'long', month: 'long', day: 'numeric', year: 'numeric'});
+      const hmFmt = new Intl.DateTimeFormat('en-GB', {hour: '2-digit', minute: '2-digit', hourCycle: 'h23'});
+      let clockTimer = null, lastHM = '';
+
+      function tick() {
+        const now = new Date();
+        const hm = hmFmt.format(now);
+        if (hm !== lastHM) {
+          lastHM = hm;
+          hmEl.textContent = hm;
+          clockEl.dateTime = now.toISOString();
+          dateEl.textContent = dateFmt.format(now);
+        }
+        secEl.textContent = String(now.getSeconds()).padStart(2, '0');
+      }
+      function scheduleTick() {clockTimer = setTimeout(() => {tick(); scheduleTick();}, 1000 - Date.now() % 1000 + 5);}
+      function startClock() {if (clockTimer === null) {lastHM = ''; tick(); scheduleTick();} }
+      function stopClock() {if (clockTimer !== null) {clearTimeout(clockTimer); clockTimer = null;} }
+
+      /* ============ Погода ============ */
+      const weatherDescriptions = {
+        0: 'Clear skies', 1: 'Mostly clear', 2: 'Partly cloudy', 3: 'Overcast',
+        45: 'Fog drifting in', 48: 'Fog drifting in',
+        51: 'A little drizzle', 53: 'Drizzle', 55: 'Steady drizzle',
+        56: 'Icy drizzle', 57: 'Icy drizzle',
+        61: 'Light rain nearby', 63: 'Rain nearby', 65: 'Heavy rain nearby',
+        66: 'Icy rain nearby', 67: 'Icy rain nearby',
+        71: 'Snow falling', 73: 'Snow falling', 75: 'Snow falling', 77: 'Snow falling',
+        80: 'Passing showers', 81: 'Passing showers', 82: 'Heavy showers',
+        85: 'Snow showers', 86: 'Snow showers',
+        95: 'Thunder somewhere far away', 96: 'Thunder somewhere far away', 99: 'Thunder somewhere far away'
+      };
+
+      let weatherTimer = 0, weatherLoading = false, lastAttemptAt = 0, nextDelay = WEATHER_REFRESH_MS, failCount = 0, hasWeather = false;
+
+      function stopWeatherTimer() {if (weatherTimer) {clearTimeout(weatherTimer); weatherTimer = 0;} }
+      function scheduleWeather() {
+        stopWeatherTimer();
+        if (document.hidden || !coords || weatherLoading) return;   // идущий запрос сам перепланирует себя в finally
+        const delay = Math.max(0, nextDelay - (Date.now() - lastAttemptAt));
+        weatherTimer = setTimeout(() => {weatherTimer = 0; if (!document.hidden) refreshWeather();}, delay);
+      }
+      function refreshWeather() {
+        if (!coords) return Promise.resolve();
+        return loadWeather(coords.lat, coords.lon).finally(scheduleWeather);
+      }
+
+      async function loadWeather(lat, lon) {
+        if (weatherLoading) return;
+        weatherLoading = true; lastAttemptAt = Date.now();
+        const ctrl = new AbortController(), abortTimer = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        try {
+          const url = `https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,cloud_cover,weather_code&timezone=auto`;
+          const res = await fetch(url, {signal: ctrl.signal, cache: 'no-store'});
+          if (!res.ok) throw Error('weather ' + res.status);
+          const data = await res.json(), c = data && data.current;
+          if (!c || typeof c.temperature_2m !== 'number') throw Error('unexpected weather payload');
+          setCloud(c.weather_code, c.cloud_cover);
+          tempEl.textContent = `${Math.round(c.temperature_2m)}°C`;
+          weatherText.textContent = weatherDescriptions[c.weather_code] || 'Night weather';
+          weatherRow.classList.remove('no-temp', 'stale');
+          hasWeather = true; failCount = 0; nextDelay = WEATHER_REFRESH_MS;
+        } catch (e) {
+          failCount++;
+          nextDelay = RETRY_MS[Math.min(failCount - 1, RETRY_MS.length - 1)];
+          if (hasWeather) weatherRow.classList.add('stale');   // последние данные остаются на экране, но приглушены
+          else weatherText.textContent = 'A quiet night · weather unavailable';
+        } finally {
+          clearTimeout(abortTimer);
+          weatherLoading = false;
+        }
+      }
+
+      /* ============ Геолокация ============ */
+      let locating = false, geoDenied = false;
+      function locate() {
+        if (!navigator.geolocation) {if (!hasWeather) weatherText.textContent = 'A quiet night'; return;}
+        if (locating || coords) return;
+        locating = true;
+        navigator.geolocation.getCurrentPosition(pos => {
+          locating = false; geoDenied = false;
+          coords = {lat: pos.coords.latitude, lon: pos.coords.longitude};
+          refreshWeather();
+        }, err => {
+          locating = false;
+          geoDenied = !!err && err.code === 1;
+          if (!hasWeather) weatherText.textContent = 'A quiet night';
+        }, {enableHighAccuracy: false, timeout: 10000, maximumAge: 600000});
+      }
+      function watchGeoPermission() {   // если разрешение выдали позже, подхватываем без перезагрузки
+        if (!navigator.permissions || !navigator.permissions.query) return;
+        navigator.permissions.query({name: 'geolocation'}).then(st => {
+          st.onchange = () => {if (st.state === 'granted') {geoDenied = false; locate();} else if (st.state === 'denied') geoDenied = true;};
+        }).catch(() => { });
+      }
+
+      /* ============ Жизненный цикл ============ */
+      function applyMotion() {
+        if (document.hidden) return;
+        if (reducedMotion.matches) {
+          stopSky(); stopMeteors(); clearMeteorTimer();
+          cloudCur = cloudTarget;
+          draw(performance.now());   // один статичный кадр
+        } else {
+          startSky(); scheduleMeteor();
+        }
+      }
+
+      let resizeTimer = 0;
+      addEventListener('resize', () => {clearTimeout(resizeTimer); resizeTimer = setTimeout(resize, 150);}, {passive: true});
+      document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+          stopSky(); stopMeteors(); clearMeteorTimer(); stopClock(); stopWeatherTimer();
+        } else {
+          startSky(); startClock(); scheduleMeteor();
+          if (coords) scheduleWeather(); else if (!geoDenied) locate();   // просроченные данные обновятся сразу
+        }
+      });
+      addEventListener('online', () => {
+        if (document.hidden) return;
+        if (coords) {if (failCount > 0) refreshWeather();} else if (!geoDenied) locate();
+      });
+      reducedMotion.addEventListener?.('change', applyMotion);
+
+      resize();
+      startClock();
+      watchGeoPermission();
+      locate();
+      applyMotion();
+    })();
+  </script>
+</body>
+
+</html>
