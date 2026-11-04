@@ -6,10 +6,10 @@ A small collection of atmospheric web screensavers. Each one is a single static 
 
 These are not weather dashboards. Atmosphere comes first, and the interface is kept to what adds value to the scene.
 
-| STRIKE | DRIFT |
-| :---: | :---: |
-| ![STRIKE: a dark thunderstorm with rain, a clock and a weather card](screenshots/strike.webp) | ![DRIFT: a quiet starry night sky with a clock and the local temperature](screenshots/drift.webp) |
-| A cinematic thunderstorm | A quiet night sky to drift off under |
+| STRIKE | DRIFT | MIST |
+| :---: | :---: | :---: |
+| ![STRIKE: a dark thunderstorm with rain, a clock and a weather card](screenshots/strike.webp) | ![DRIFT: a quiet starry night sky with a clock and the local temperature](screenshots/drift.webp) | ![MIST: a windmill in a cold, foggy German morning](screenshots/mist.webp) |
+| A cinematic thunderstorm | A quiet night sky to drift off under | A windmill in a grey morning fog |
 
 ## Experiences
 
@@ -28,10 +28,19 @@ A calm, clear summer night: lying on your back, watching the sky, starting to do
 
 - Clock, date, and the local temperature with a short, quiet description
 - No controls and no clutter
+- Live demo: [drift.zhe700.space](https://drift.zhe700.space)
+
+### MIST
+
+A drawn scene of a grey German morning around an old windmill. Bare trees and distant rooftops recede into blue-grey mist; the windmill sails turn slowly behind a small clock and local weather.
+
+- Local clock, date, and current temperature
+- A quiet weather description, with gentle fog motion and slowly turning sails that respect reduced-motion preferences
+- A hand-drawn, self-contained SVG landscape; no image assets or external dependencies
 
 ## Features
 
-- **Single file per experience.** One `index.html` with inline CSS, JavaScript, and SVG. No build step, framework, or dependencies.
+- **Small static experiences.** Each page has inline CSS and JavaScript, with no build step, framework, or dependencies. MIST draws its scene in inline SVG.
 - **Light on resources.** Animation pauses when the tab is hidden and resumes when it returns. The pages deliberately ignore window focus, so a screensaver visible on one monitor keeps running while you work on another.
 - **Respects `prefers-reduced-motion`.** With reduced motion on, the scene renders a single still frame with no flashes.
 - **Resilient weather.** Requests time out after 10 seconds and retry with backoff (1, 2, then 5 minutes). If an update fails, the last reading stays on screen, dimmed, and the page keeps working with no weather at all.
@@ -41,14 +50,14 @@ A calm, clear summer night: lying on your back, watching the sky, starting to do
 
 ## Quick start
 
-1. Pick an experience: `strike` or `drift`.
-2. Copy that folder's `index.html` to any static web host.
+1. Pick an experience: `strike`, `drift`, or `mist`.
+2. Copy that folder to any static web host.
 3. Open the page in a browser.
 
 To try it locally, run a static server in the experience's folder:
 
 ```sh
-cd strike
+cd mist
 python3 -m http.server 8080
 ```
 
@@ -94,6 +103,7 @@ Weather data comes from [Open-Meteo](https://open-meteo.com), whose free API is 
 ```
 strike/index.html   thunderstorm experience
 drift/index.html    night sky experience
+mist/index.html     misty morning experience
 screenshots/        preview images used in this README
 ```
 
